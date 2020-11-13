@@ -381,6 +381,11 @@ func expandGlueTableInput(d *schema.ResourceData) *glue.TableInput {
 		tableInput.PartitionKeys = columns
 	}
 
+	if v, ok := d.GetOk("partition_keys"); ok {
+		indexes := expandPartitionIndexes(v.([]interface{}))
+		tableInput.PartitionIndexes = indexes
+	}
+
 	if v, ok := d.GetOk("view_original_text"); ok {
 		tableInput.ViewOriginalText = aws.String(v.(string))
 	}
@@ -636,6 +641,29 @@ func flattenGlueColumn(c *glue.Column) map[string]string {
 	}
 
 	return column
+}
+
+func expandGluePartitionIndexes(columns []interface{}) []*glue.Column {
+	columnSlice := []*glue.Column{}
+	for _, element := range columns {
+		elementMap := element.(map[string]interface{})
+
+		column := &glue.Column{
+			Name: aws.String(elementMap["name"].(string)),
+		}
+
+		if v, ok := elementMap["comment"]; ok {
+			column.Comment = aws.String(v.(string))
+		}
+
+		if v, ok := elementMap["type"]; ok {
+			column.Type = aws.String(v.(string))
+		}
+
+		columnSlice = append(columnSlice, column)
+	}
+
+	return columnSlice
 }
 
 func flattenGlueSerDeInfo(s *glue.SerDeInfo) []map[string]interface{} {

@@ -56,6 +56,23 @@ func resourceAwsGlueCatalogTable() *schema.Resource {
 				Optional: true,
 				Elem:     &schema.Schema{Type: schema.TypeString},
 			},
+			"partition_indexes": {
+				Type:     schema.TypeList,
+				Optional: true,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"index_name": {
+							Type:     schema.TypeString,
+							Required: true,
+						},
+						"keys": {
+							Type:     schema.TypeList,
+							Required: true,
+							Elem:     &schema.Schema{Type: schema.TypeString},
+						},
+					},
+				},
+			},
 			"partition_keys": {
 				Type:     schema.TypeList,
 				Optional: true,
@@ -237,10 +254,16 @@ func resourceAwsGlueCatalogTableCreate(d *schema.ResourceData, meta interface{})
 	dbName := d.Get("database_name").(string)
 	name := d.Get("name").(string)
 
+	var partitionIndexes ([]*glue.PartitionIndex) = nil
+	if v, ok := d.GetOk("partition_indexes"); ok {
+		partitionIndexes = expandGluePartitionIndexes(v.([]interface{}))
+	}
+
 	input := &glue.CreateTableInput{
-		CatalogId:    aws.String(catalogID),
-		DatabaseName: aws.String(dbName),
-		TableInput:   expandGlueTableInput(d),
+		CatalogId:        aws.String(catalogID),
+		DatabaseName:     aws.String(dbName),
+		TableInput:       expandGlueTableInput(d),
+		PartitionIndexes: partitionIndexes,
 	}
 
 	_, err := conn.CreateTable(input)
@@ -379,11 +402,6 @@ func expandGlueTableInput(d *schema.ResourceData) *glue.TableInput {
 	if v, ok := d.GetOk("partition_keys"); ok {
 		columns := expandGlueColumns(v.([]interface{}))
 		tableInput.PartitionKeys = columns
-	}
-
-	if v, ok := d.GetOk("partition_keys"); ok {
-		indexes := expandPartitionIndexes(v.([]interface{}))
-		tableInput.PartitionIndexes = indexes
 	}
 
 	if v, ok := d.GetOk("view_original_text"); ok {
@@ -643,27 +661,27 @@ func flattenGlueColumn(c *glue.Column) map[string]string {
 	return column
 }
 
-func expandGluePartitionIndexes(columns []interface{}) []*glue.Column {
-	columnSlice := []*glue.Column{}
-	for _, element := range columns {
+func expandGluePartitionIndexes(partitionIndexes []interface{}) []*glue.PartitionIndex {
+	partitionIndexSlice := []*glue.PartitionIndex{}
+	for _, element := range partitionIndexes {
 		elementMap := element.(map[string]interface{})
 
-		column := &glue.Column{
-			Name: aws.String(elementMap["name"].(string)),
+		partitionIndex := &glue.PartitionIndex{
+			IndexName: aws.String(elementMap["index_name"].(string)),
 		}
 
-		if v, ok := elementMap["comment"]; ok {
-			column.Comment = aws.String(v.(string))
+		if v, ok := elementMap["keys"]; ok {
+			keysSlice := make([]string, len(v.([]interface{})))
+			for i, item := range v.([]interface{}) {
+				keysSlice[i] = fmt.Sprint(item)
+			}
+			partitionIndex.Keys = aws.StringSlice(keysSlice)
 		}
 
-		if v, ok := elementMap["type"]; ok {
-			column.Type = aws.String(v.(string))
-		}
-
-		columnSlice = append(columnSlice, column)
+		partitionIndexSlice = append(partitionIndexSlice, partitionIndex)
 	}
 
-	return columnSlice
+	return partitionIndexSlice
 }
 
 func flattenGlueSerDeInfo(s *glue.SerDeInfo) []map[string]interface{} {

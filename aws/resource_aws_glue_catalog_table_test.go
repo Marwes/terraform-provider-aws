@@ -533,6 +533,11 @@ resource "aws_glue_catalog_table" "test" {
     }
   }
 
+  partition_indexes {
+    index_name = "my_index"
+    keys = ["my_column_1", "my_column_2"]
+  }
+
   partition_keys {
     name    = "my_column_1"
     type    = "int"
